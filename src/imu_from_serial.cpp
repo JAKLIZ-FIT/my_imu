@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <sstream>
 
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/imu.hpp"
@@ -56,6 +57,38 @@ private:
 
         // Set the fields of the IMU message (e.g., orientation, angular velocity, linear acceleration)
         // For demonstration, set some example values
+
+        istringstream iss(serial_data);
+        float qi;
+        float qj;
+        float qk;
+        float qr;
+        float qa;
+        getline(iss, qi, "\t");
+        getline(iss, qj, "\t");
+        getline(iss, qk, "\t");
+        getline(iss, ql, "\t");
+        getline(iss, qa, "\t");
+        float la_x;
+        float la_y;
+        float la_z;
+        uint8_t la_acc;
+        getline(iss, la_x, "\t");
+        getline(iss, la_y, "\t");
+        getline(iss, la_z, "\t");
+        getline(iss, la_acc, "\t");
+        float g_x;
+        float g_y;
+        float g_z;
+        getline(iss, gx, "\t");
+        getline(iss, gy, "\t");
+        getline(iss, gz, "\t");
+
+        std::string rest;
+        getline(iss, rest);            
+
+        std::cout << rest;
+
         imu_msg.orientation.x = 0.0;
         imu_msg.orientation.y = 0.0;
         imu_msg.orientation.z = 0.0;
