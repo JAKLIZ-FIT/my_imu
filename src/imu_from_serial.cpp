@@ -93,7 +93,9 @@ private:
 
             // Process the received data
             // Assuming serial_data contains IMU data in a specific format, parse it accordingly
-            sensor_msgs::msg::Imu imu_msg = parse_imu_data(serial_data);
+            sensor_msgs::msg::Imu imu_msg;
+            
+            bool imu_msg_valid = parse_imu_data(imu_msg, serial_data);
 
             // Publish the IMU data to ROS topic
             publisher_->publish(imu_msg);
@@ -110,11 +112,11 @@ private:
         }
     }
 
-    sensor_msgs::msg::Imu parse_imu_data(const std::string &serial_data)
+    bool parse_imu_data(sensor_msgs::msg::Imu &imu_msg, const std::string &serial_data)
     {
         // Assuming serial_data contains IMU data in a specific format, parse it accordingly
         // Fill the IMU message with the parsed data
-        sensor_msgs::msg::Imu imu_msg;
+        //sensor_msgs::msg::Imu imu_msg;
 
         imu_msg.header.stamp = this->get_clock()->now();
         imu_msg.header.frame_id = "imu_link"; // Use the specific IMU link here
@@ -142,20 +144,10 @@ private:
             }
         }
 
-        //std::cout << serial_data << std::endl;
-
-        //for (double val : values){
-        //    std::cout << val << ",";
-        //}
-        //std::cout << std::endl;
-
-        if (values.size() < 12){
+        if (values.size() != 14){ // 5 values for quarternion, 4 values for lin accel, 3 for gyro, 2 debug
             RCLCPP_INFO(this->get_logger(), "Invalid input IMU data");
             std::cout << serial_data << std::endl;
-            while(values.size() != 12){
-                values.push_back(0.0);
-            }
-            values[3] = 1.0;
+            return false; // imu_msg_valid = false
         }
 
         // Set the fields of the IMU message (e.g., orientation, angular velocity, linear acceleration)
@@ -165,17 +157,19 @@ private:
         imu_msg.orientation.y = values[1];
         imu_msg.orientation.z = values[2];
         imu_msg.orientation.w = values[3];
-
-        imu_msg.angular_velocity.x = values[5];
-        imu_msg.angular_velocity.y = values[6];
-        imu_msg.angular_velocity.z = values[7];
-
-        imu_msg.linear_acceleration.x = values[9];
-        imu_msg.linear_acceleration.y = values[10];
-        imu_msg.linear_acceleration.z = values[11];
+        // values[4] // == quarternion error in radians
+        imu_msg.linear_acceleration.x = values[5];
+        imu_msg.linear_acceleration.y = values[6];
+        imu_msg.linear_acceleration.z = values[7];
+        // values[8] // == linear acceleration accuracy
+        imu_msg.angular_velocity.x = values[9];
+        imu_msg.angular_velocity.y = values[10];
+        imu_msg.angular_velocity.z = values[11];
         //std::cout << "Quarternion error=" << values[4] << "\n"; // TODO create a Debug parameter
-        return imu_msg;
+        return true; // imu_msg_valid = true
     }
+
+
     int inactive_counter = 0;
     serial::Serial serial_port_;
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
