@@ -26,16 +26,70 @@ public:
         publisher_ = this->create_publisher<sensor_msgs::msg::Imu>("imu_data", 10);
 
         // Timer to read from serial port and publish data
-        timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&SerialToRosNode::serial_to_ros, this));
+        timer_ = this->create_wall_timer(std::chrono::milliseconds(5), std::bind(&SerialToRosNode::serial_to_ros, this));
     }
 
 private:
     void serial_to_ros()
     {
-        if (serial_port_.available() > 0)
+        bool serial_available = false;
+        try{
+            serial_available = serial_port_.available();
+        }
+        catch(const serial::IOException& e)
         {
+            RCLCPP_ERROR(this->get_logger(), "Serial IO Exception: %s", e.what());
+            while (1)
+            {
+                // Attempt to close and reopen the connection
+                try {
+                    serial_port_.close();
+                    serial_port_.open();
+                    RCLCPP_INFO(this->get_logger(), "Reconnected to IMU");
+                } catch (const std::exception& e) {
+                    RCLCPP_ERROR(this->get_logger(), "Failed to reconnect: %s", e.what());
+                    rclcpp::sleep_for(std::chrono::milliseconds(500));// Wait before retrying
+                    continue;
+                }
+                break;
+            }
+        }
+        
+        if (serial_available > 0)
+        {
+            this->inactive_counter = 0;
             // Read data from serial port
-            std::string serial_data = serial_port_.readline();
+            std::string serial_data;
+            try{
+                 serial_data = serial_port_.readline();
+            }
+            catch(const serial::IOException& e){
+                //RCLCPP_INFO(this->get_logger(), "Serial connection broken");
+                //serial_data= "broken serial connection";
+                RCLCPP_ERROR(this->get_logger(), "Serial IO Exception: %s", e.what());
+                while (1)
+                {
+                    // Attempt to close and reopen the connection
+                    try {
+                        serial_port_.close();
+                        serial_port_.open();
+                        RCLCPP_INFO(this->get_logger(), "Reconnected to IMU");
+                    } catch (const std::exception& e) {
+                        RCLCPP_ERROR(this->get_logger(), "Failed to reconnect: %s", e.what());
+                        // Wait before retrying
+                        rclcpp::sleep_for(std::chrono::milliseconds(500));
+                        continue;
+                    }
+                    break;                        
+                }
+                return;
+            }
+
+            if (isalpha(serial_data[0])){ 
+                RCLCPP_INFO(this->get_logger(), "No-data IMU message");
+                std::cout << serial_data << std::endl;
+                return; 
+            }
 
             // Process the received data
             // Assuming serial_data contains IMU data in a specific format, parse it accordingly
@@ -47,6 +101,13 @@ private:
             // Log the published data
             RCLCPP_INFO(this->get_logger(), "Published IMU data");
         }
+        else{
+            this->inactive_counter++;
+            if (this->inactive_counter > 1000){
+                RCLCPP_INFO(this->get_logger(), "No IMU data received in last 5 seconds");
+                this->inactive_counter = 0;
+            }
+        }
     }
 
     sensor_msgs::msg::Imu parse_imu_data(const std::string &serial_data)
@@ -55,56 +116,67 @@ private:
         // Fill the IMU message with the parsed data
         sensor_msgs::msg::Imu imu_msg;
 
+        imu_msg.header.stamp = this->get_clock()->now();
+        imu_msg.header.frame_id = "imu_link"; // Use the specific IMU link here
+
         // Set the fields of the IMU message (e.g., orientation, angular velocity, linear acceleration)
         // For demonstration, set some example values
 
-        istringstream iss(serial_data);
-        float qi;
-        float qj;
-        float qk;
-        float qr;
-        float qa;
-        getline(iss, qi, "\t");
-        getline(iss, qj, "\t");
-        getline(iss, qk, "\t");
-        getline(iss, ql, "\t");
-        getline(iss, qa, "\t");
-        float la_x;
-        float la_y;
-        float la_z;
-        uint8_t la_acc;
-        getline(iss, la_x, "\t");
-        getline(iss, la_y, "\t");
-        getline(iss, la_z, "\t");
-        getline(iss, la_acc, "\t");
-        float g_x;
-        float g_y;
-        float g_z;
-        getline(iss, gx, "\t");
-        getline(iss, gy, "\t");
-        getline(iss, gz, "\t");
+        std::vector<double> values;
+        std::stringstream ss(serial_data);
+        //int i = 0;
+        double value;
+        while (ss >> value){
+            
+            values.push_back(value);
 
-        std::string rest;
-        getline(iss, rest);            
+            char nextchar = ss.peek();
+            if (nextchar == '\t'){
+                ss.ignore();
+            }
+            if (nextchar == ','){
+                ss.ignore();
+            }
+            if (nextchar == '\n'){
+                break;
+            }
+        }
 
-        std::cout << rest;
+        //std::cout << serial_data << std::endl;
 
-        imu_msg.orientation.x = 0.0;
-        imu_msg.orientation.y = 0.0;
-        imu_msg.orientation.z = 0.0;
-        imu_msg.orientation.w = 1.0;
+        //for (double val : values){
+        //    std::cout << val << ",";
+        //}
+        //std::cout << std::endl;
 
-        imu_msg.angular_velocity.x = 0.0;
-        imu_msg.angular_velocity.y = 0.0;
-        imu_msg.angular_velocity.z = 0.0;
+        if (values.size() < 12){
+            RCLCPP_INFO(this->get_logger(), "Invalid input IMU data");
+            std::cout << serial_data << std::endl;
+            while(values.size() != 12){
+                values.push_back(0.0);
+            }
+            values[3] = 1.0;
+        }
 
-        imu_msg.linear_acceleration.x = 0.0;
-        imu_msg.linear_acceleration.y = 0.0;
-        imu_msg.linear_acceleration.z = 0.0;
+        // Set the fields of the IMU message (e.g., orientation, angular velocity, linear acceleration)
+        // For demonstration, set some example values
 
+        imu_msg.orientation.x = values[0];
+        imu_msg.orientation.y = values[1];
+        imu_msg.orientation.z = values[2];
+        imu_msg.orientation.w = values[3];
+
+        imu_msg.angular_velocity.x = values[5];
+        imu_msg.angular_velocity.y = values[6];
+        imu_msg.angular_velocity.z = values[7];
+
+        imu_msg.linear_acceleration.x = values[9];
+        imu_msg.linear_acceleration.y = values[10];
+        imu_msg.linear_acceleration.z = values[11];
+        //std::cout << "Quarternion error=" << values[4] << "\n"; // TODO create a Debug parameter
         return imu_msg;
     }
-
+    int inactive_counter = 0;
     serial::Serial serial_port_;
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
@@ -113,8 +185,17 @@ private:
 int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<SerialToRosNode>();
-    rclcpp::spin(node);
+    try
+    {
+        auto node = std::make_shared<SerialToRosNode>();
+        rclcpp::spin(node);
+    }
+    catch(const serial::IOException& e)
+    {
+        std::cerr << "CRASHED IN MAIN\n";
+        std::cerr << e.what() << '\n';
+    }
+    
     rclcpp::shutdown();
     return 0;
 }
