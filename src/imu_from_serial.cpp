@@ -97,17 +97,27 @@ private:
             
             bool imu_msg_valid = parse_imu_data(imu_msg, serial_data);
 
-            // Publish the IMU data to ROS topic
-            publisher_->publish(imu_msg);
+            if (imu_msg_valid)
+            {
+                // Publish the IMU data to ROS topic
+                publisher_->publish(imu_msg);
 
-            // Log the published data
-            RCLCPP_INFO(this->get_logger(), "Published IMU data");
+                // Log the published data
+                RCLCPP_INFO(this->get_logger(), "Published IMU data");
+            }
+            else
+            {
+                RCLCPP_INFO(this->get_logger(), "Invalid input IMU data");
+                std::cout << serial_data << std::endl;
+            }
         }
-        else{
+        else
+        {
             this->inactive_counter++;
-            if (this->inactive_counter > 1000){
-                RCLCPP_INFO(this->get_logger(), "No IMU data received in last 5 seconds");
+            if (this->inactive_counter > 1000)
+            {
                 this->inactive_counter = 0;
+                RCLCPP_INFO(this->get_logger(), "No IMU data received in last 5 seconds");
             }
         }
     }
@@ -144,9 +154,8 @@ private:
             }
         }
 
+        // TODO add checksum?
         if (values.size() != 14){ // 5 values for quarternion, 4 values for lin accel, 3 for gyro, 2 debug
-            RCLCPP_INFO(this->get_logger(), "Invalid input IMU data");
-            std::cout << serial_data << std::endl;
             return false; // imu_msg_valid = false
         }
 
