@@ -122,8 +122,28 @@ private:
         }
     }
 
+    bool verifyChecksum(const std::string& message, std::string delimiter) {
+        size_t last_delim = message.find_last_of(delimiter);
+        if (last_delim == std::string::npos) {
+            return false;
+        }
+
+        std::string data = message.substr(0, last_delim);
+        int received_checksum = stoi(message.substr(last_delim + delimiter.length()));
+        int calculated_checksum = 0;
+
+        for (char c : data) {
+            calculated_checksum += c;
+        }
+
+        return calculated_checksum == received_checksum;
+    }
+
     bool parse_imu_data(sensor_msgs::msg::Imu &imu_msg, const std::string &serial_data)
     {
+        std::string delimiter = ",";
+        if (!verifyChecksum(serial_data, delimiter)) return false;
+
         // Assuming serial_data contains IMU data in a specific format, parse it accordingly
         // Fill the IMU message with the parsed data
         //sensor_msgs::msg::Imu imu_msg;
@@ -154,13 +174,12 @@ private:
             }
         }
 
-        // TODO add checksum?
-        if (values.size() != 14){ // 5 values for quarternion, 4 values for lin accel, 3 for gyro, 2 debug
-            return false; // imu_msg_valid = false
+        // 5 values for quarternion, 4 values for lin accel, 3 for gyro, 2 debug, 1 checksum
+        if (values.size() != 15){ 
+            return false; // invalid incoming message
         }
 
         // Set the fields of the IMU message (e.g., orientation, angular velocity, linear acceleration)
-        // For demonstration, set some example values
 
         imu_msg.orientation.x = values[0];
         imu_msg.orientation.y = values[1];
@@ -175,7 +194,7 @@ private:
         imu_msg.angular_velocity.y = values[10];
         imu_msg.angular_velocity.z = values[11];
         //std::cout << "Quarternion error=" << values[4] << "\n"; // TODO create a Debug parameter
-        return true; // imu_msg_valid = true
+        return true; // valid incoming message
     }
 
 
