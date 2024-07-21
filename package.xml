@@ -3,8 +3,8 @@
 <package format="3">
   <name>my_imu</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="rosrpi@todo.todo">rosrpi</maintainer>
+  <description>Serial to ROS topic</description>
+  <maintainer email="george.vein.z@gmail.com">Jiri Zilka</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
