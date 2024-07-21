@@ -15,6 +15,9 @@ class SerialToRosNode : public rclcpp::Node
 public:
     SerialToRosNode() : Node("serial_to_ros_node")
     {
+        this->declare_parameter("verbose", true);
+        this->print_publish = this->get_parameter("verbose").as_bool();
+
         // Initialize serial port
         serial_port_.setPort("/dev/ttyACM0"); // Change port as required
         serial_port_.setBaudrate(115200); // Change baudrate as required
@@ -103,7 +106,10 @@ private:
                 publisher_->publish(imu_msg);
 
                 // Log the published data
-                RCLCPP_INFO(this->get_logger(), "Published IMU data");
+                if (this->print_publish)
+                {
+                    RCLCPP_INFO(this->get_logger(), "Published IMU data");
+                }
             }
             else
             {
@@ -142,7 +148,11 @@ private:
     bool parse_imu_data(sensor_msgs::msg::Imu &imu_msg, const std::string &serial_data)
     {
         std::string delimiter = ",";
-        if (!verifyChecksum(serial_data, delimiter)) return false;
+        if (!verifyChecksum(serial_data, delimiter)) 
+        {
+            RCLCPP_INFO(this->get_logger(), "Invalid checksum");
+            return false;
+        }
 
         // Assuming serial_data contains IMU data in a specific format, parse it accordingly
         // Fill the IMU message with the parsed data
@@ -197,7 +207,7 @@ private:
         return true; // valid incoming message
     }
 
-
+    bool print_publish = true;
     int inactive_counter = 0;
     serial::Serial serial_port_;
     rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr publisher_;
